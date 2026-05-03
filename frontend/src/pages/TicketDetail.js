@@ -20,6 +20,9 @@ function TicketDetail({ user }) {
   const [assigneePhone, setAssigneePhone] = useState('');
   const [progressComment, setProgressComment] = useState('');
   const [closeComment, setCloseComment] = useState('');
+  
+  // 图片预览状态
+  const [previewImage, setPreviewImage] = useState(null);
 
   useEffect(() => {
     fetchTicket();
@@ -231,10 +234,14 @@ function TicketDetail({ user }) {
 
         {ticket.images && ticket.images.length > 0 && (
           <div className="detail-section">
-            <h3 className="detail-section-title">图片附件</h3>
+            <h3 className="detail-section-title">图片附件（点击图片可放大查看）</h3>
             <div className="image-grid">
               {ticket.images.map((img, index) => (
-                <div key={img.id} className="image-item">
+                <div 
+                  key={img.id} 
+                  className="image-item"
+                  onClick={() => setPreviewImage({ path: img.path, index: index + 1 })}
+                >
                   <img
                     src={img.path}
                     alt={`图片 ${index + 1}`}
@@ -245,6 +252,34 @@ function TicketDetail({ user }) {
                   />
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* 图片预览模态框 */}
+        {previewImage && (
+          <div 
+            className="image-preview-overlay"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setPreviewImage(null);
+              }
+            }}
+          >
+            <div className="image-preview-container">
+              <button 
+                className="image-preview-close"
+                onClick={() => setPreviewImage(null)}
+              >
+                ×
+              </button>
+              <img
+                src={previewImage.path}
+                alt={`图片 ${previewImage.index}`}
+              />
+              <div className="image-preview-info">
+                图片 {previewImage.index}
+              </div>
             </div>
           </div>
         )}
