@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, RepairTicket, TicketImage, TicketLog
@@ -18,6 +18,11 @@ db.init_app(app)
 # 创建上传目录
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
+
+# 静态文件路由 - 用于访问上传的图片
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # 故障类型列表
 FAULT_TYPES = [
@@ -178,6 +183,19 @@ def get_tickets():
         owner = User.query.get(ticket.owner_id)
         assignee = User.query.get(ticket.assignee_id) if ticket.assignee_id else None
         
+        # 将图片路径转换为可访问的URL
+        images = []
+        for img in ticket.images:
+            # 检查是否已经是URL格式（以/开头）
+            if img.image_path.startswith('/'):
+                image_url = img.image_path
+            else:
+                # 从路径中提取文件名（处理可能包含目录的情况）
+                # 支持Windows路径（\）和Unix路径（/）
+                filename = os.path.basename(img.image_path.replace('\\', '/'))
+                image_url = f'/uploads/{filename}'
+            images.append({'id': img.id, 'path': image_url})
+        
         result.append({
             'id': ticket.id,
             'title': ticket.title,
@@ -194,7 +212,7 @@ def get_tickets():
             'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
             'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
             'completed_at': ticket.completed_at.isoformat() if ticket.completed_at else None,
-            'images': [{'id': img.id, 'path': img.image_path} for img in ticket.images]
+            'images': images
         })
     
     return jsonify(result), 200
@@ -221,8 +239,15 @@ def get_ticket(ticket_id):
             'created_at': log.created_at.isoformat() if log.created_at else None
         })
     
-    # 获取图片
-    images = [{'id': img.id, 'path': img.image_path} for img in ticket.images]
+    # 获取图片 - 将路径转换为可访问的URL
+    images = []
+    for img in ticket.images:
+        # 检查是否已经是URL格式（以/开头）
+        if img.image_path.startswith('/'):
+            image_url = img.image_path
+        else:
+            image_url = f'/uploads/{img.image_path}'
+        images.append({'id': img.id, 'path': image_url})
     
     result = {
         'id': ticket.id,
@@ -428,15 +453,17 @@ def upload_image(ticket_id):
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # 保存到数据库
+        # 保存到数据库 - 存储相对路径
         image = TicketImage(
             ticket_id=ticket_id,
-            image_path=filepath
+            image_path=filename  # 只存储文件名，不存储完整路径
         )
         db.session.add(image)
         db.session.commit()
         
-        return jsonify({'message': '图片上传成功', 'id': image.id, 'path': filepath}), 201
+        # 返回可访问的URL
+        image_url = f'/uploads/{filename}'
+        return jsonify({'message': '图片上传成功', 'id': image.id, 'path': image_url}), 201
     
     return jsonify({'error': '文件上传失败'}), 500
 
